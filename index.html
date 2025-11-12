@@ -119,27 +119,16 @@ max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.4)}
   </div>
 </div>
 
-<!-- Librerías PDF -->
+<!-- Librerías PDF (CDN) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-
+/* =========================
+   Estado y datos
+========================= */
 let registros = JSON.parse(localStorage.getItem("estudiantesPractica"))||[];
 let seleccionado=-1;
-
-function mostrarTabla(){
- const tb=document.querySelector("#tabla tbody");
- tb.innerHTML="";
- registros.forEach((r,i)=>{
-   const tr=document.createElement("tr");
-   tr.innerHTML=`<td>${r.nombre}</td><td>${r.rut}</td><td>${r.institucion}</td><td>${r.carrera}</td>
-   <td>${r.tiempo}</td><td>${r.fechaIngreso}</td><td>${r.fechaSalida}</td><td>${r.evaluacion}</td>
-   <td><button class='btn-test' onclick='abrirTest(${i})'>Test</button></td>`;
-   tb.appendChild(tr);
- });
-}
 
 const PREGUNTAS=[
 "1. Porta en todo momento su credencial de identificación.",
@@ -158,14 +147,32 @@ const PREGUNTAS=[
 ];
 const ESTADOS=["","✓","✕","○"];
 
-window.abrirTest = function(i){
+/* =========================
+   Tabla principal
+========================= */
+function mostrarTabla(){
+ const tb=document.querySelector("#tabla tbody");
+ tb.innerHTML="";
+ registros.forEach((r,i)=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML=`<td>${r.nombre||""}</td><td>${r.rut||""}</td><td>${r.institucion||""}</td><td>${r.carrera||""}</td>
+   <td>${r.tiempo||""}</td><td>${r.fechaIngreso||""}</td><td>${r.fechaSalida||""}</td><td>${r.evaluacion||"Pendiente"}</td>
+   <td><button class='btn-test' onclick='abrirTest(${i})'>Test</button></td>`;
+   tb.appendChild(tr);
+ });
+}
+
+/* =========================
+   Modal Test
+========================= */
+function abrirTest(i){
  seleccionado=i;
- const r=registros[i];
- document.getElementById("testNombre").value=r.nombre;
- document.getElementById("testRut").value=r.rut;
- document.getElementById("testCarrera").value=r.carrera;
- document.getElementById("testInstitucion").value=r.institucion;
- document.getElementById("testFecha").value=new Date().toISOString().split("T")[0];
+ const r=registros[i]||{};
+ document.getElementById("testNombre").value=r.nombre||"";
+ document.getElementById("testRut").value=r.rut||"";
+ document.getElementById("testCarrera").value=r.carrera||"";
+ document.getElementById("testInstitucion").value=r.institucion||"";
+ document.getElementById("testFecha").value=(new Date()).toISOString().split("T")[0];
 
  const cont=document.getElementById("preguntasContainer");
  cont.innerHTML="";
@@ -173,10 +180,11 @@ window.abrirTest = function(i){
    const tr=document.createElement("tr");
    tr.innerHTML=`<td>${p}</td>
    <td><div class='respuesta is-empty' data-estado='0'>—</div></td>
-   <td><textarea class='observacion'></textarea></td>`;
+   <td><textarea class='observacion' placeholder="Observación..."></textarea></td>`;
    cont.appendChild(tr);
  });
 
+ // alternar estado ✓ ✕ ○ —
  cont.querySelectorAll(".respuesta").forEach(el=>{
    el.onclick=()=>{let e=parseInt(el.dataset.estado);e=(e+1)%ESTADOS.length;el.dataset.estado=e;
      el.textContent=ESTADOS[e]||"—";
@@ -184,76 +192,183 @@ window.abrirTest = function(i){
      actualizarBotones();
    };
  });
+
  actualizarBotones();
  document.getElementById("modalTest").style.display="flex";
 }
 
-window.cerrarTest = function(){document.getElementById("modalTest").style.display="none";}
-function testCompleto(){return[...document.querySelectorAll(".respuesta")].every(e=>parseInt(e.dataset.estado)>0);}
+function cerrarTest(){document.getElementById("modalTest").style.display="none";}
+
+function testCompleto(){
+ return Array.from(document.querySelectorAll("#preguntasContainer .respuesta"))
+   .every(e=>parseInt(e.dataset.estado)>0);
+}
+
 function actualizarBotones(){
  const listo=testCompleto();
- document.getElementById("btnDescargar").disabled=!listo;
- document.getElementById("btnImprimir").disabled=!listo;
+ const d=document.getElementById("btnDescargar");
+ const p=document.getElementById("btnImprimir");
+ if(d) d.disabled=!listo;
+ if(p) p.disabled=!listo;
 }
-function leerAlumno(){return{
- nombre:testNombre.value,rut:testRut.value,carrera:testCarrera.value,
- institucion:testInstitucion.value,fecha:testFecha.value};}
 
+function leerAlumno(){return{
+ nombre:document.getElementById("testNombre").value,
+ rut:document.getElementById("testRut").value,
+ carrera:document.getElementById("testCarrera").value,
+ institucion:document.getElementById("testInstitucion").value,
+ fecha:document.getElementById("testFecha").value
+};}
+
+/* =========================
+   PDF / Imprimir
+========================= */
 async function generarPDF(imprimir=false){
- const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"letter"});
- let logo=document.getElementById("logoPantalla")?.src||"logo_cito.png";const img=new Image();img.src=logo;try{await img.decode();doc.addImage(img,"PNG",15,10,25,25);}catch(_){}
- doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text("CENTRO DE SALUD FAMILIAR SAN PABLO",45,18);
- doc.setFont("helvetica","normal");doc.setFontSize(11);doc.text("Relación Asistencial Docente",45,24);
- doc.setFontSize(14);doc.setFont("helvetica","bold");doc.text("Evaluación de Calidad y Seguridad",105,38,{align:"center"});
+ if(!window.jspdf || !window.jspdf.jsPDF){ alert("No se cargó jsPDF. Revisa tu conexión."); return; }
+ const {jsPDF}=window.jspdf;
+ const doc=new jsPDF({unit:"mm",format:"letter"});
+
+ // Logo (si existe)
+ let logo=document.getElementById("logoPantalla")?.src||"logo_cito.png";
+ const img=new Image(); img.src=logo;
+ try{ await img.decode(); doc.addImage(img,"PNG",15,10,25,25); }catch(_){}
+
+ // Encabezado
+ doc.setFont("helvetica","bold");doc.setFontSize(13);
+ doc.text("CENTRO DE SALUD FAMILIAR SAN PABLO",45,18);
+ doc.setFont("helvetica","normal");doc.setFontSize(11);
+ doc.text("Relación Asistencial Docente",45,24);
+
+ // Título
+ doc.setFontSize(14);doc.setFont("helvetica","bold");
+ doc.text("Evaluación de Calidad y Seguridad",105,38,{align:"center"});
+
+ // Datos alumno
  const a=leerAlumno();
  doc.setFont("helvetica","normal");doc.setFontSize(10);
- doc.text(`Nombre: ${a.nombre}`,20,48);doc.text(`RUT: ${a.rut}`,20,53);
- doc.text(`Carrera: ${a.carrera}`,110,48);doc.text(`Institución: ${a.institucion}`,110,53);
- doc.text(`Fecha: ${a.fecha}`,20,58);
- const filas=[];let cumple=0,resps=[];
+ doc.text(`Nombre: ${a.nombre||""}`,20,48);
+ doc.text(`RUT: ${a.rut||""}`,20,53);
+ doc.text(`Carrera: ${a.carrera||""}`,110,48);
+ doc.text(`Institución: ${a.institucion||""}`,110,53);
+ doc.text(`Fecha: ${a.fecha||""}`,20,58);
+
+ // Tabla
+ const filas=[];let cumple=0; const resps=[];
  document.querySelectorAll("#preguntasContainer tr").forEach(tr=>{
-  const t=tr.children[0].textContent,r=tr.querySelector(".respuesta").dataset.estado*1,obs=tr.querySelector(".observacion").value;
-  if(r===1)cumple++;filas.push([t,"",obs]);resps.push(r);
+   const t=tr.children[0].textContent;
+   const r=parseInt(tr.querySelector(".respuesta").dataset.estado||"0");
+   const obs=tr.querySelector(".observacion").value||"";
+   if(r===1) cumple++;
+   filas.push([t,"",obs]);
+   resps.push(r);
  });
+
  const porc=Math.round((cumple/filas.length)*100);
- doc.autoTable({head:[["Pregunta","Resp.","Observaciones"]],body:filas,startY:70,
- styles:{fontSize:9,cellPadding:2,valign:"middle"},
- headStyles:{fillColor:[21,94,239],textColor:255,halign:"center"},
- columnStyles:{0:{cellWidth:110},1:{cellWidth:15,halign:"center"},2:{cellWidth:65}},
- didDrawCell:(d)=>{
-  if(d.section==="body"&&d.column.index===1){const e=resps[d.row.index];const{x,y,width,height}=d.cell;const cx=x+width/2,cy=y+height/2;
-   doc.setLineWidth(.6);
-   if(e===1){doc.setDrawColor(22,163,74);doc.line(cx-3,cy+2,cx-1,cy+4);doc.line(cx-1,cy+4,cx+4,cy-3);}
-   if(e===2){doc.setDrawColor(220,38,38);doc.line(cx-3,cy-3,cx+3,cy+3);doc.line(cx+3,cy-3,cx-3,cy+3);}
-   if(e===3){doc.setDrawColor(51,65,85);doc.circle(cx,cy,3);}
+
+ doc.autoTable({
+  head:[["Pregunta","Resp.","Observaciones"]],
+  body:filas,
+  startY:70,
+  styles:{fontSize:9,cellPadding:2,valign:"middle"},
+  headStyles:{fillColor:[21,94,239],textColor:255,halign:"center"},
+  columnStyles:{0:{cellWidth:110},1:{cellWidth:15,halign:"center"},2:{cellWidth:65}},
+  didDrawCell:(d)=>{
+    if(d.section==="body" && d.column.index===1){
+      const e=resps[d.row.index];
+      const{x,y,width,height}=d.cell;
+      const cx=x+width/2, cy=y+height/2;
+      doc.setLineWidth(.6);
+      if(e===1){ // ✓
+        doc.setDrawColor(22,163,74);
+        doc.line(cx-3,cy+2,cx-1,cy+4);
+        doc.line(cx-1,cy+4,cx+4,cy-3);
+      } else if(e===2){ // ✕
+        doc.setDrawColor(220,38,38);
+        doc.line(cx-3,cy-3,cx+3,cy+3);
+        doc.line(cx+3,cy-3,cx-3,cy+3);
+      } else if(e===3){ // ○
+        doc.setDrawColor(51,65,85);
+        doc.circle(cx,cy,3);
+      }
+    }
   }
- }});
- const y=doc.lastAutoTable.finalY+10;
- doc.text(`Nivel de cumplimiento: ${porc}%`,20,y);
+ });
+
+ const y=(doc.lastAutoTable?.finalY||70)+10;
+ doc.setFont("helvetica","bold"); doc.text(`Nivel de cumplimiento: ${porc}%`,20,y);
+
+ // Firmas
+ doc.setFont("helvetica","normal");
  doc.line(40,y+25,90,y+25);doc.text("Firma Docente Guía",48,y+30);
  doc.line(130,y+25,180,y+25);doc.text("Firma Alumno(a)",145,y+30);
- doc.text("Relación Asistencial Docente – CESFAM San Pablo",105,275,{align:"center"});
- if(imprimir){const url=doc.output("bloburl");const w=window.open(url,"_blank");w.onload=()=>w.print();}
- else doc.save(`Informe_${a.nombre||"Alumno"}.pdf`);
-}
-document.getElementById("btnDescargar").onclick=()=>generarPDF(false);
-document.getElementById("btnImprimir").onclick=()=>generarPDF(true);
 
-/* === CRUD === */
-window.nuevoRegistro=function(){formulario.reset();seleccionado=-1;}
-window.guardarRegistro=function(){
- const r={nombre:nombre.value,rut:rut.value,institucion:institucion.value,carrera:carrera.value,
- tiempo:tiempo.value,fechaIngreso:fechaIngreso.value,fechaSalida:fechaSalida.value,evaluacion:evaluacion.value};
- if(!r.nombre||!r.rut){alert("Ingrese nombre y RUT");return;}
- if(seleccionado>=0)registros[seleccionado]=r;else registros.push(r);
- localStorage.setItem("estudiantesPractica",JSON.stringify(registros));mostrarTabla();
+ // Pie institucional
+ doc.text("Relación Asistencial Docente – CESFAM San Pablo",105,275,{align:"center"});
+
+ if(imprimir){
+   const url=doc.output("bloburl");
+   const w=window.open(url,"_blank");
+   if(!w){ alert("El navegador bloqueó la vista. Habilita pop-ups."); return; }
+   w.onload=()=>{ try{ w.print(); }catch(e){} };
+ } else {
+   doc.save(`Informe_${a.nombre||"Alumno"}.pdf`);
+ }
 }
-window.eliminarRegistro=function(){if(seleccionado>=0){registros.splice(seleccionado,1);
- localStorage.setItem("estudiantesPractica",JSON.stringify(registros));mostrarTabla();}}
-window.borrarTodo=function(){if(confirm("¿Borrar todos los registros?")){registros=[];localStorage.clear();mostrarTabla();}}
-window.calcularFechaSalida=function(){if(fechaIngreso.value&&tiempo.value){let b=new Date(fechaIngreso.value);b.setDate(b.getDate()+parseInt(tiempo.value));fechaSalida.value=b.toISOString().split("T")[0];}}
-mostrarTabla();
+
+document.addEventListener("click",(e)=>{
+  if(e.target && e.target.id==="btnDescargar") generarPDF(false);
+  if(e.target && e.target.id==="btnImprimir")  generarPDF(true);
 });
+
+/* =========================
+   CRUD
+========================= */
+function nuevoRegistro(){document.getElementById("formulario").reset();seleccionado=-1;}
+
+function guardarRegistro(){
+ const r={
+  nombre:document.getElementById("nombre").value,
+  rut:document.getElementById("rut").value,
+  institucion:document.getElementById("institucion").value,
+  carrera:document.getElementById("carrera").value,
+  tiempo:document.getElementById("tiempo").value,
+  fechaIngreso:document.getElementById("fechaIngreso").value,
+  fechaSalida:document.getElementById("fechaSalida").value,
+  evaluacion:document.getElementById("evaluacion").value
+ };
+ if(!r.nombre||!r.rut){alert("Ingrese nombre y RUT");return;}
+ if(seleccionado>=0) registros[seleccionado]=r; else registros.push(r);
+ localStorage.setItem("estudiantesPractica",JSON.stringify(registros));
+ mostrarTabla();
+}
+
+function eliminarRegistro(){
+ if(seleccionado>=0){
+   registros.splice(seleccionado,1);
+   localStorage.setItem("estudiantesPractica",JSON.stringify(registros));
+   mostrarTabla();
+ }
+}
+
+function borrarTodo(){
+ if(confirm("¿Borrar todos los registros?")){
+   registros=[];
+   localStorage.removeItem("estudiantesPractica");
+   mostrarTabla();
+ }
+}
+
+function calcularFechaSalida(){
+ const f=document.getElementById("fechaIngreso").value;
+ const d=parseInt(document.getElementById("tiempo").value||"0");
+ if(f && d>0){
+   const base=new Date(f); base.setDate(base.getDate()+d);
+   document.getElementById("fechaSalida").value=base.toISOString().split("T")[0];
+ }
+}
+
+/* Inicializa la tabla al cargar */
+mostrarTabla();
 </script>
 </body>
 </html>
