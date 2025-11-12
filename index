@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Control de Estudiantes en Práctica</title>
+
+<style>
+*{box-sizing:border-box;font-family:Arial,sans-serif}
+body{margin:0;display:flex;height:100vh;background:#f0f0f0}
+.sidebar{width:220px;background:rgba(50,50,50,0.9);color:#fff;padding:20px;
+display:flex;flex-direction:column;align-items:stretch;box-shadow:2px 0 8px rgba(0,0,0,0.2)}
+.logo{width:100%;height:100px;margin-bottom:20px;display:flex;align-items:center;justify-content:center}
+.logo img{width:100%;height:auto;border-radius:8px}
+.sidebar button{background:rgba(255,255,255,0.1);border:none;color:white;margin:5px 0;padding:12px;border-radius:6px;
+cursor:pointer;transition:background 0.2s;font-weight:bold}
+.sidebar button:hover{background:rgba(255,255,255,0.25)}
+.main{flex:1;padding:20px;overflow-y:auto}
+h1{margin-top:0;color:#222}
+form{background:white;padding:20px;border-radius:10px;box-shadow:0 0 6px rgba(0,0,0,0.1);
+display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px}
+label{font-weight:bold;color:#444}
+input,select{padding:8px;border:1px solid #ccc;border-radius:5px;width:100%}
+table{width:100%;margin-top:20px;border-collapse:collapse;background:white;
+border-radius:10px;box-shadow:0 0 6px rgba(0,0,0,0.1)}
+th,td{padding:10px;border-bottom:1px solid #ddd;text-align:left}
+th{background:#374151;color:white}
+tr:hover{background:#f3f3f3;cursor:pointer}
+tr.selected{background:#b7d5ff!important}
+.btn-test{background:#155eef;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer}
+.btn-test:hover{background:#0f49c4}
+
+/* === Modal Test === */
+#modalTest{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:1000;
+background:rgba(0,0,0,0.55)}
+.modal-test{background:#fff;border-radius:10px;padding:20px;width:min(900px,95vw);
+max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.4)}
+.test-header{text-align:center;font-weight:bold;font-size:18px;margin-bottom:10px;color:#1e293b}
+.test-table{width:100%;border-collapse:collapse;background:#fff}
+.test-table th{background:#155eef;color:#fff;padding:8px;text-align:left}
+.test-table td{border-bottom:1px solid #ddd;padding:8px;vertical-align:top}
+.respuesta{text-align:center;font-size:18px;cursor:pointer;font-weight:bold;width:100%}
+.respuesta.is-empty{color:#cbd5e1}
+.respuesta.yes{color:#16a34a}
+.respuesta.no{color:#dc2626}
+.respuesta.na{color:#334155}
+.observacion{width:100%;min-height:30px;resize:vertical;border:1px solid #ccc;border-radius:5px;padding:4px;font-size:13px}
+.test-footer{display:flex;justify-content:space-between;margin-top:15px}
+.btn{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
+.btn-primario{background:#155eef;color:white}
+.btn-primario:disabled{background:#9ca3af;cursor:not-allowed}
+.btn-secundario{background:#6b7280;color:white}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+ <div class="logo">
+  <img id="logoPantalla" src="logo_cito.png" alt="Logo institucional">
+ </div>
+  <button onclick="nuevoRegistro()">Nuevo</button>
+  <button onclick="guardarRegistro()">Guardar</button>
+  <button onclick="eliminarRegistro()">Eliminar</button>
+  <button onclick="borrarTodo()">Borrar todo</button>
+</div>
+
+<div class="main">
+  <h1>Control de Estudiantes en Práctica</h1>
+  <form id="formulario">
+    <div><label>Nombre:</label><input type="text" id="nombre" required></div>
+    <div><label>RUT:</label><input type="text" id="rut" required></div>
+    <div><label>Institución:</label><input type="text" id="institucion" required></div>
+    <div><label>Carrera:</label><input type="text" id="carrera" required></div>
+    <div><label>Cantidad de días:</label><input type="number" id="tiempo" min="1" required oninput="calcularFechaSalida()"></div>
+    <div><label>Fecha ingreso:</label><input type="date" id="fechaIngreso" required onchange="calcularFechaSalida()"></div>
+    <div><label>Fecha salida (auto):</label><input type="date" id="fechaSalida" readonly></div>
+    <div><label>Evaluación:</label>
+      <select id="evaluacion">
+        <option value="Pendiente">Pendiente</option>
+        <option value="Sí">Sí</option>
+        <option value="No">No</option>
+      </select>
+    </div>
+  </form>
+
+  <table id="tabla">
+    <thead>
+      <tr>
+        <th>Nombre</th><th>RUT</th><th>Institución</th><th>Carrera</th>
+        <th>Días</th><th>Ingreso</th><th>Salida</th><th>Evaluación</th><th>Test</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+<!-- === Modal del Test === -->
+<div id="modalTest">
+  <div class="modal-test">
+    <div class="test-header">Evaluación de Calidad y Seguridad</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:10px;">
+      <div><label>Nombre</label><input id="testNombre" readonly></div>
+      <div><label>RUT</label><input id="testRut" readonly></div>
+      <div><label>Carrera</label><input id="testCarrera" readonly></div>
+      <div><label>Institución</label><input id="testInstitucion" readonly></div>
+      <div><label>Fecha</label><input id="testFecha" type="date"></div>
+    </div>
+    <table class="test-table">
+      <thead><tr><th>Pregunta</th><th style="text-align:center;width:60px;">Resp.</th><th>Observaciones</th></tr></thead>
+      <tbody id="preguntasContainer"></tbody>
+    </table>
+    <div class="test-footer">
+      <button id="btnDescargar" class="btn btn-primario" disabled>Descargar PDF</button>
+      <button id="btnImprimir" class="btn btn-secundario" disabled>Imprimir</button>
+      <button class="btn" style="background:#9ca3af;color:#fff;" onclick="cerrarTest()">Volver</button>
+    </div>
+  </div>
+</div>
+
+<!-- Librerías PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+let registros = JSON.parse(localStorage.getItem("estudiantesPractica"))||[];
+let seleccionado=-1;
+
+function mostrarTabla(){
+ const tb=document.querySelector("#tabla tbody");
+ tb.innerHTML="";
+ registros.forEach((r,i)=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML=`<td>${r.nombre}</td><td>${r.rut}</td><td>${r.institucion}</td><td>${r.carrera}</td>
+   <td>${r.tiempo}</td><td>${r.fechaIngreso}</td><td>${r.fechaSalida}</td><td>${r.evaluacion}</td>
+   <td><button class='btn-test' onclick='abrirTest(${i})'>Test</button></td>`;
+   tb.appendChild(tr);
+ });
+}
+
+const PREGUNTAS=[
+"1. Porta en todo momento su credencial de identificación.",
+"2. Se identifica como alumno frente al usuario y personal del establecimiento.",
+"3. Utiliza uniforme completo.",
+"4. Cumple con normativas de manejo y prevención de IAAS según protocolo.",
+"5. Cuida las instalaciones, el instrumental y/o equipamiento que utiliza.",
+"6. Conoce el flujograma ante la exposición a sangre o fluidos corporales.",
+"7. Cumple con manejo de REAS según reglamento de establecimientos de salud.",
+"8. Realiza correctamente el lavado clínico de manos según protocolo.",
+"9. Conoce la zona de seguridad según protocolo de evacuación.",
+"10. Conoce la Ley de Derechos y Deberes de los pacientes.",
+"11. Conoce el proceso de notificación de eventos adversos y centinela.",
+"12. Sabe cómo actuar ante activación de CÓDIGO AZUL.",
+"13. Conoce depósitos para eliminación de material cortopunzante y fluidos biológicos."
+];
+const ESTADOS=["","✓","✕","○"];
+function abrirTest(i){
+ seleccionado=i;
+ const r=registros[i];
+ document.getElementById("testNombre").value=r.nombre;
+ document.getElementById("testRut").value=r.rut;
+ document.getElementById("testCarrera").value=r.carrera;
+ document.getElementById("testInstitucion").value=r.institucion;
+ document.getElementById("testFecha").value=new Date().toISOString().split("T")[0];
+
+ const cont=document.getElementById("preguntasContainer");
+ cont.innerHTML="";
+ PREGUNTAS.forEach((p,j)=>{
+   const tr=document.createElement("tr");
+   tr.innerHTML=`<td>${p}</td>
+   <td><div class='respuesta is-empty' data-estado='0'>—</div></td>
+   <td><textarea class='observacion'></textarea></td>`;
+   cont.appendChild(tr);
+ });
+
+ cont.querySelectorAll(".respuesta").forEach(el=>{
+   el.onclick=()=>{let e=parseInt(el.dataset.estado);e=(e+1)%ESTADOS.length;el.dataset.estado=e;
+     el.textContent=ESTADOS[e]||"—";
+     el.className="respuesta "+(e===1?"yes":e===2?"no":e===3?"na":"is-empty");
+     actualizarBotones();
+   };
+ });
+ actualizarBotones();
+ document.getElementById("modalTest").style.display="flex";
+}
+function cerrarTest(){document.getElementById("modalTest").style.display="none";}
+function testCompleto(){return[...document.querySelectorAll(".respuesta")].every(e=>parseInt(e.dataset.estado)>0);}
+function actualizarBotones(){
+ const listo=testCompleto();
+ document.getElementById("btnDescargar").disabled=!listo;
+ document.getElementById("btnImprimir").disabled=!listo;
+}
+function leerAlumno(){return{
+ nombre:testNombre.value,rut:testRut.value,carrera:testCarrera.value,
+ institucion:testInstitucion.value,fecha:testFecha.value};}
+
+async function generarPDF(imprimir=false){
+ const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:"mm",format:"letter"});
+ let logo=document.getElementById("logoPantalla")?.src||"logo_cito.png";const img=new Image();img.src=logo;try{await img.decode();doc.addImage(img,"PNG",15,10,25,25);}catch(_){}
+ doc.setFont("helvetica","bold");doc.setFontSize(13);doc.text("CENTRO DE SALUD FAMILIAR SAN PABLO",45,18);
+ doc.setFont("helvetica","normal");doc.setFontSize(11);doc.text("Relación Asistencial Docente",45,24);
+ doc.setFontSize(14);doc.setFont("helvetica","bold");doc.text("Evaluación de Calidad y Seguridad",105,38,{align:"center"});
+ const a=leerAlumno();
+ doc.setFont("helvetica","normal");doc.setFontSize(10);
+ doc.text(`Nombre: ${a.nombre}`,20,48);doc.text(`RUT: ${a.rut}`,20,53);
+ doc.text(`Carrera: ${a.carrera}`,110,48);doc.text(`Institución: ${a.institucion}`,110,53);
+ doc.text(`Fecha: ${a.fecha}`,20,58);
+ const filas=[];let cumple=0,resps=[];
+ document.querySelectorAll("#preguntasContainer tr").forEach(tr=>{
+  const t=tr.children[0].textContent,r=tr.querySelector(".respuesta").dataset.estado*1,obs=tr.querySelector(".observacion").value;
+  if(r===1)cumple++;filas.push([t,"",obs]);resps.push(r);
+ });
+ const porc=Math.round((cumple/filas.length)*100);
+ doc.autoTable({head:[["Pregunta","Resp.","Observaciones"]],body:filas,startY:70,
+ styles:{fontSize:9,cellPadding:2,valign:"middle"},
+ headStyles:{fillColor:[21,94,239],textColor:255,halign:"center"},
+ columnStyles:{0:{cellWidth:110},1:{cellWidth:15,halign:"center"},2:{cellWidth:65}},
+ didDrawCell:(d)=>{
+  if(d.section==="body"&&d.column.index===1){const e=resps[d.row.index];const{x,y,width,height}=d.cell;const cx=x+width/2,cy=y+height/2;
+   doc.setLineWidth(.6);
+   if(e===1){doc.setDrawColor(22,163,74);doc.line(cx-3,cy+2,cx-1,cy+4);doc.line(cx-1,cy+4,cx+4,cy-3);}
+   if(e===2){doc.setDrawColor(220,38,38);doc.line(cx-3,cy-3,cx+3,cy+3);doc.line(cx+3,cy-3,cx-3,cy+3);}
+   if(e===3){doc.setDrawColor(51,65,85);doc.circle(cx,cy,3);}
+  }
+ }});
+ const y=doc.lastAutoTable.finalY+10;
+ doc.text(`Nivel de cumplimiento: ${porc}%`,20,y);
+ doc.line(40,y+25,90,y+25);doc.text("Firma Docente Guía",48,y+30);
+ doc.line(130,y+25,180,y+25);doc.text("Firma Alumno(a)",145,y+30);
+ doc.text("Relación Asistencial Docente – CESFAM San Pablo",105,275,{align:"center"});
+ if(imprimir){const url=doc.output("bloburl");const w=window.open(url,"_blank");w.onload=()=>w.print();}
+ else doc.save(`Informe_${a.nombre||"Alumno"}.pdf`);
+}
+btnDescargar.onclick=()=>generarPDF(false);
+btnImprimir.onclick=()=>generarPDF(true);
+
+/* === CRUD === */
+function nuevoRegistro(){formulario.reset();seleccionado=-1;}
+function guardarRegistro(){
+ const r={nombre:nombre.value,rut:rut.value,institucion:institucion.value,carrera:carrera.value,
+ tiempo:tiempo.value,fechaIngreso:fechaIngreso.value,fechaSalida:fechaSalida.value,evaluacion:evaluacion.value};
+ if(seleccionado>=0)registros[seleccionado]=r;else registros.push(r);
+ localStorage.setItem("estudiantesPractica",JSON.stringify(registros));mostrarTabla();
+}
+function eliminarRegistro(){if(seleccionado>=0){registros.splice(seleccionado,1);
+ localStorage.setItem("estudiantesPractica",JSON.stringify(registros));mostrarTabla();}}
+function borrarTodo(){if(confirm("¿Borrar todos los registros?")){registros=[];localStorage.clear();mostrarTabla();}}
+function calcularFechaSalida(){if(fechaIngreso.value&&tiempo.value){let b=new Date(fechaIngreso.value);b.setDate(b.getDate()+parseInt(tiempo.value));fechaSalida.value=b.toISOString().split("T")[0];}}
+mostrarTabla();
+</script>
+</body>
+</html>
