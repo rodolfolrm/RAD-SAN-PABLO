@@ -303,6 +303,7 @@ function calcularFechaSalida(){
  if(fi && dias>0){ let b=new Date(fi); b.setDate(b.getDate()+dias); document.getElementById("fechaSalida").value=b.toISOString().split("T")[0]; }
 }
 mostrarTabla();
+document.addEventListener("DOMContentLoaded", mostrarTabla);
 </script>
 </body>
 </html>
